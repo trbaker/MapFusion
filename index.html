@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>MapFusion GIS</title>
+
+<link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css" />
+<script src="https://js.arcgis.com/4.30/"></script>
+
+<style>
+  :root{
+    --ink:#163b3f;          /* deep teal ink */
+    --ink-2:#0f2a2d;
+    --paper:#f4efe4;        /* warm map paper */
+    --paper-2:#fbf8f1;
+    --line:#d8cfba;         /* hairline contour */
+    --marker:#e8743b;       /* highlighter / active tool */
+    --marker-soft:#fbe6da;
+    --sea:#cfe3df;
+    --text:#243133;
+    --muted:#6c7a72;
+    --rail-w:64px;
+    --panel-w:332px;
+    --font-display:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-body:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:var(--font-body);color:var(--text);background:var(--ink-2)}
+  #app{display:flex;flex-direction:column;height:100%}
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex;align-items:center;gap:12px;
+    height:54px;padding:0 14px;flex:0 0 auto;
+    background:linear-gradient(180deg,var(--ink) 0%,var(--ink-2) 100%);
+    color:var(--paper-2);border-bottom:2px solid var(--marker);
+  }
+  .brand{display:flex;align-items:baseline;gap:8px;font-family:var(--font-display)}
+  .brand b{font-size:21px;font-weight:600;letter-spacing:.2px}
+  .brand span{font-size:12px;color:var(--sea);letter-spacing:.14em;text-transform:uppercase}
+  .spacer{flex:1}
+  header button{
+    font-family:var(--font-body);font-size:13px;font-weight:600;
+    color:var(--paper-2);background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.22);border-radius:8px;
+    padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  }
+  header button:hover{background:rgba(255,255,255,.18)}
+  header button.primary{background:var(--marker);border-color:var(--marker)}
+  header button.primary:hover{background:#d8602a}
+
+  /* ---------- Body layout ---------- */
+  #body{flex:1;display:flex;min-height:0}
+
+  /* Tool rail */
+  #rail{
+    width:var(--rail-w);flex:0 0 auto;background:var(--ink);
+    display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0;
+    border-right:1px solid var(--ink-2);overflow-y:auto;
+  }
+  .tool{
+    width:48px;height:48px;border-radius:10px;border:1px solid transparent;
+    background:transparent;color:var(--sea);cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    font-size:9px;font-weight:600;letter-spacing:.02em;line-height:1;
+  }
+  .tool .ico{font-size:19px}
+  .tool:hover{background:rgba(255,255,255,.08);color:var(--paper-2)}
+  .tool.active{background:var(--marker-soft);color:var(--ink);border-color:var(--marker)}
+
+  /* Sliding panel */
+  #panel{
+    width:var(--panel-w);flex:0 0 auto;background:var(--paper);
+    border-right:1px solid var(--line);display:none;flex-direction:column;min-height:0;
+  }
+  #panel.open{display:flex}
+  .panel-head{
+    padding:14px 16px 10px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .panel-head h2{margin:0;font-family:var(--font-display);font-size:17px;font-weight:600;color:var(--ink)}
+  .panel-head .close{border:none;background:none;font-size:20px;line-height:1;color:var(--muted);cursor:pointer;padding:2px 6px}
+  .panel-body{padding:14px 16px;overflow-y:auto;flex:1}
+  .pane{display:none}
+  .pane.active{display:block}
+  .hint{font-size:12.5px;color:var(--muted);margin:0 0 12px;line-height:1.45}
+
+  .field-label{display:block;font-size:12px;font-weight:700;color:var(--ink);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 6px}
+  input[type=text],input[type=search]{
+    width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;
+    background:var(--paper-2);font-size:14px;font-family:var(--font-body);color:var(--text);
+  }
+  input:focus{outline:2px solid var(--marker);outline-offset:0;border-color:var(--marker)}
+  .row{display:flex;gap:8px}
+  .row > *{flex:1}
+
+  .btn{
+    width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--ink);
+    background:var(--ink);color:var(--paper-2);font-weight:600;font-size:13.5px;cursor:pointer;
+  }
+  .btn:hover{background:var(--ink-2)}
+  .btn.ghost{background:transparent;color:var(--ink)}
+  .btn.ghost:hover{background:rgba(22,59,63,.07)}
+  .btn.marker{background:var(--marker);border-color:var(--marker)}
+  .btn.marker:hover{background:#d8602a}
+  .btn-row{display:flex;gap:8px;margin-top:10px}
+  .btn-row .btn{width:auto;flex:1}
+
+  /* search result cards */
+  .results{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+  .card{border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:var(--paper-2)}
+  .card h4{margin:0 0 3px;font-size:13.5px;color:var(--ink)}
+  .card .meta{font-size:11.5px;color:var(--muted);margin:0 0 6px}
+  .card .tag{display:inline-block;font-size:10.5px;font-weight:700;color:var(--ink);background:var(--sea);
+    border-radius:5px;padding:1px 6px;margin-bottom:6px}
+  .card .add{font-size:12px;font-weight:700;color:var(--marker);background:none;border:1px solid var(--marker);
+    border-radius:7px;padding:5px 10px;cursor:pointer}
+  .card .add:hover{background:var(--marker);color:#fff}
+  .empty{font-size:13px;color:var(--muted);font-style:italic;padding:8px 0}
+
+  /* widget host containers fill nicely */
+  .widget-host{margin-top:6px}
+  .esri-basemap-gallery{background:transparent}
+
+  /* Help list */
+  .help-item{display:flex;gap:10px;margin-bottom:12px}
+  .help-item .k{font-size:18px;width:24px;text-align:center}
+  .help-item .t{font-size:13px;line-height:1.45}
+  .help-item .t b{color:var(--ink)}
+
+  /* ---------- Map + footer ---------- */
+  #map-wrap{flex:1;position:relative;min-width:0}
+  #viewDiv{position:absolute;inset:0}
+  #footer{
+    position:absolute;left:0;right:0;bottom:0;height:26px;z-index:5;
+    display:flex;align-items:center;gap:18px;padding:0 12px;
+    background:rgba(15,42,45,.86);color:var(--paper-2);font-size:11.5px;
+    font-variant-numeric:tabular-nums;backdrop-filter:blur(4px);
+  }
+  #footer .lbl{color:var(--sea);font-weight:700;letter-spacing:.04em}
+  #coordOut{cursor:copy}
+
+  /* toast */
+  #toast{
+    position:absolute;top:14px;left:50%;transform:translateX(-50%) translateY(-12px);
+    z-index:30;background:var(--ink);color:var(--paper-2);padding:9px 16px;border-radius:9px;
+    font-size:13px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);
+    opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;border-left:3px solid var(--marker)
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* modal for API key / save */
+  .modal-bg{position:fixed;inset:0;z-index:50;background:rgba(15,42,45,.45);display:none;align-items:center;justify-content:center}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--paper);border-radius:14px;width:min(420px,92vw);padding:22px;border-top:4px solid var(--marker)}
+  .modal h3{margin:0 0 6px;font-family:var(--font-display);font-size:19px;color:var(--ink)}
+  .modal p{font-size:13px;color:var(--muted);line-height:1.5;margin:0 0 14px}
+  .modal a{color:var(--marker);font-weight:600}
+
+  @media (max-width:720px){
+    :root{--panel-w:280px}
+    .brand span{display:none}
+    .tool{width:46px;height:46px}
+  }
+  @media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand"><b>MapFusion</b><span>GIS</span></div>
+    <div class="spacer"></div>
+    <button id="btnOpen">📂 Open map</button>
+    <button id="btnSave" class="primary">💾 Save map</button>
+    <button id="btnKey" title="Add an ArcGIS key (optional)">🔑</button>
+    <input type="file" id="fileInput" accept=".json,application/json" style="display:none" />
+  </header>
+
+  <div id="body">
+    <!-- Tool rail -->
+    <nav id="rail">
+      <button class="tool" data-pane="basemaps"><span class="ico">🗺️</span>Basemap</button>
+      <button class="tool" data-pane="add"><span class="ico">➕</span>Add data</button>
+      <button class="tool" data-pane="layers"><span class="ico">📋</span>Layers</button>
+      <button class="tool" data-pane="measure"><span class="ico">📏</span>Measure</button>
+      <button class="tool" data-pane="sketch"><span class="ico">✏️</span>Sketch</button>
+      <button class="tool" data-pane="coords"><span class="ico">📍</span>Coords</button>
+      <button class="tool" data-pane="help"><span class="ico">❓</span>Help</button>
+    </nav>
+
+    <!-- Sliding panel -->
+    <section id="panel">
+      <div class="panel-head">
+        <h2 id="panelTitle">Basemap</h2>
+        <button class="close" id="panelClose" title="Close panel">×</button>
+      </div>
+      <div class="panel-body">
+
+        <!-- Basemaps -->
+        <div class="pane" id="pane-basemaps">
+          <p class="hint">Pick the background map your map sits on. Imagery shows photos from space; Topographic shows roads and land features.</p>
+          <div id="basemapHost" class="widget-host"></div>
+        </div>
+
+        <!-- Add data -->
+        <div class="pane" id="pane-add">
+          <p class="hint">Search ArcGIS Online for free public layers — try “rivers”, “earthquakes”, “national parks”, or “population”. Then press Add.</p>
+          <label class="field-label" for="layerQuery">Search public layers</label>
+          <div class="row">
+            <input type="search" id="layerQuery" placeholder="e.g. earthquakes" />
+          </div>
+          <div class="btn-row"><button class="btn" id="layerSearchBtn">Search ArcGIS Online</button></div>
+          <div class="results" id="layerResults"></div>
+
+          <label class="field-label" for="layerUrl">Or paste a service URL</label>
+          <input type="text" id="layerUrl" placeholder="https://…/FeatureServer/0" />
+          <div class="btn-row"><button class="btn ghost" id="layerUrlBtn">Add from URL</button></div>
+        </div>
+
+        <!-- Layers -->
+        <div class="pane" id="pane-layers">
+          <p class="hint">Turn layers on and off, reorder them, or remove ones you don’t need.</p>
+          <div id="layerListHost" class="widget-host"></div>
+        </div>
+
+        <!-- Measure -->
+        <div class="pane" id="pane-measure">
+          <p class="hint">Measure distance along a line or the area of a shape. Click on the map to place points; double-click to finish.</p>
+          <div class="btn-row">
+            <button class="btn" id="measDist">📏 Distance</button>
+            <button class="btn" id="measArea">⬛ Area</button>
+          </div>
+          <div class="btn-row"><button class="btn ghost" id="measClear">Clear measurement</button></div>
+          <div id="measureHost" class="widget-host" style="margin-top:12px"></div>
+        </div>
+
+        <!-- Sketch -->
+        <div class="pane" id="pane-sketch">
+          <p class="hint">Draw points, lines, and shapes right on the map. Use the tools below to add, move, and delete your drawings.</p>
+          <div id="sketchHost" class="widget-host"></div>
+          <div class="btn-row"><button class="btn ghost" id="sketchClear">Erase all drawings</button></div>
+        </div>
+
+        <!-- Coordinates -->
+        <div class="pane" id="pane-coords">
+          <p class="hint">See latitude and longitude. Move your mouse over the map to read coordinates, click the map to lock one in, or type coordinates to jump there.</p>
+          <div id="coordHost" class="widget-host"></div>
+        </div>
+
+        <!-- Help -->
+        <div class="pane" id="pane-help">
+          <p class="hint">A quick tour of every tool. GIS stands for <b>Geographic Information System</b> — software for making and studying maps.</p>
+          <div class="help-item"><span class="k">🗺️</span><span class="t"><b>Basemap</b> — change the background map (satellite, streets, topographic…).</span></div>
+          <div class="help-item"><span class="k">➕</span><span class="t"><b>Add data</b> — find free public map layers and add them on top.</span></div>
+          <div class="help-item"><span class="k">📋</span><span class="t"><b>Layers</b> — show, hide, reorder, or remove your layers.</span></div>
+          <div class="help-item"><span class="k">📏</span><span class="t"><b>Measure</b> — find how long or how big something is.</span></div>
+          <div class="help-item"><span class="k">✏️</span><span class="t"><b>Sketch</b> — draw your own points, lines, and shapes.</span></div>
+          <div class="help-item"><span class="k">📍</span><span class="t"><b>Coords</b> — read and enter latitude/longitude.</span></div>
+          <div class="help-item"><span class="k">🔍</span><span class="t"><b>Search</b> (top of map) — find a place or address.</span></div>
+          <div class="help-item"><span class="k">💾</span><span class="t"><b>Save / Open</b> — save your map as a file, then open it again later. The file follows the ArcGIS web map format, so it also works in ArcGIS Online.</span></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Map -->
+    <div id="map-wrap">
+      <div id="viewDiv"></div>
+      <div id="toast"></div>
+      <div id="footer">
+        <span><span class="lbl">LAT/LONG</span>&nbsp; <span id="coordOut">move over the map…</span></span>
+        <span><span class="lbl">SCALE</span>&nbsp; 1:<span id="scaleOut">—</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- API key modal -->
+<div class="modal-bg" id="keyModal">
+  <div class="modal">
+    <h3>ArcGIS API key (optional)</h3>
+    <p>The app works without a key. Adding a free key from
+      <a href="https://location.arcgis.com" target="_blank" rel="noopener">ArcGIS Location Platform</a>
+      turns on Esri place search and extra basemaps. Your key is stored only on this computer.</p>
+    <input type="text" id="keyInput" placeholder="Paste API key (starts with AAPK…)" />
+    <div class="btn-row">
+      <button class="btn marker" id="keySave">Save key</button>
+      <button class="btn ghost" id="keyClear">Remove key</button>
+      <button class="btn ghost" id="keyCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Save modal -->
+<div class="modal-bg" id="saveModal">
+  <div class="modal">
+    <h3>Save your map</h3>
+    <p>This downloads a web map file (<b>.json</b>) you can open again here or upload to ArcGIS Online.</p>
+    <label class="field-label" for="mapTitle">Map name</label>
+    <input type="text" id="mapTitle" value="My Map" />
+    <div class="btn-row">
+      <button class="btn marker" id="saveConfirm">Download map file</button>
+      <button class="btn ghost" id="saveCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+require([
+  "esri/Map","esri/views/MapView","esri/WebMap","esri/Basemap",
+  "esri/widgets/BasemapGallery","esri/widgets/Search","esri/widgets/Measurement",
+  "esri/widgets/Sketch","esri/widgets/CoordinateConversion","esri/widgets/LayerList",
+  "esri/widgets/Home","esri/widgets/ScaleBar","esri/widgets/Locate",
+  "esri/layers/GraphicsLayer","esri/layers/Layer",
+  "esri/portal/PortalItem","esri/geometry/Point","esri/geometry/Extent","esri/Graphic",
+  "esri/geometry/support/jsonUtils","esri/symbols/support/jsonUtils","esri/config"
+], function(
+  Map, MapView, WebMap, Basemap,
+  BasemapGallery, Search, Measurement,
+  Sketch, CoordinateConversion, LayerList,
+  Home, ScaleBar, Locate,
+  GraphicsLayer, Layer,
+  PortalItem, Point, Extent, Graphic,
+  geomJsonUtils, symbolJsonUtils, esriConfig
+){
+  "use strict";
+
+  /* ---------- helpers ---------- */
+  const $ = (id) => document.getElementById(id);
+  let toastTimer;
+  function toast(msg){
+    const t = $("toast");
+    t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>t.classList.remove("show"), 2600);
+  }
+  function ls(get, key, val){
+    try{ return get ? localStorage.getItem(key) : localStorage.setItem(key,val); }
+    catch(e){ return null; }
+  }
+
+  /* ---------- optional API key ---------- */
+  const storedKey = ls(true,"mapfusionApiKey") || ls(true,"mapmakerApiKey");
+  if(storedKey){ esriConfig.apiKey = storedKey; }
+
+  /* ---------- map + view ---------- */
+  const sketchLayer = new GraphicsLayer({ title:"My drawings", listMode:"show" });
+  const map = new Map({ basemap:"topo-vector", layers:[sketchLayer] });
+
+  const view = new MapView({
+    container:"viewDiv",
+    map:map,
+    center:[-94.578, 39.0997],   // Kansas City
+    zoom:4,
+    popup:{ dockEnabled:true, dockOptions:{ breakpoint:false, position:"top-right" } }
+  });
+
+  // track only the layers students add (so save stays clean)
+  const addedLayers = [];
+  function registerLayer(layer){ if(layer && addedLayers.indexOf(layer)===-1) addedLayers.push(layer); }
+
+  /* ---------- in-map widgets ---------- */
+  // Search (place/address). OSM source always works; Esri added when a key exists.
+  const osmSource = {
+    name: "Places & addresses",
+    placeholder: "Find a place or address",
+    getSuggestions: (p) =>
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(p.suggestTerm)}`)
+        .then(r=>r.json())
+        .then(d=>d.map((x,i)=>({ key:x.place_id, text:x.display_name, sourceIndex:p.sourceIndex }))),
+    getResults: (p) =>
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(p.suggestTerm)}`)
+        .then(r=>r.json())
+        .then(d=>d.map(x=>{
+          const pt = new Point({ longitude:+x.lon, latitude:+x.lat });
+          return {
+            extent: x.boundingbox ? new Extent({
+              ymin:+x.boundingbox[0], ymax:+x.boundingbox[1],
+              xmin:+x.boundingbox[2], xmax:+x.boundingbox[3],
+              spatialReference:{ wkid:4326 }
+            }) : null,
+            feature: new Graphic({ geometry:pt, attributes:{ name:x.display_name } }),
+            name: x.display_name,
+            target: pt
+          };
+        }))
+  };
+
+  const search = new Search({
+    view: view,
+    includeDefaultSources: !!esriConfig.apiKey, // Esri geocoder only if key present
+    sources: [osmSource],
+    popupEnabled: true
+  });
+  view.ui.add(search, { position:"top-right", index:0 });
+
+  view.ui.move("zoom","top-left");
+  view.ui.add(new Home({ view }), "top-left");
+  view.ui.add(new Locate({ view }), "top-left");
+  view.ui.add(new ScaleBar({ view, unit:"dual" }), "bottom-right");
+
+  /* ---------- panel widgets (built once) ---------- */
+  const basemapGallery = new BasemapGallery({ view, container:"basemapHost" });
+
+  const layerList = new LayerList({
+    view, container:"layerListHost",
+    listItemCreatedFunction: (e)=>{
+      const item = e.item;
+      if(item.layer === sketchLayer) item.title = "My drawings";
+      item.actionsSections = [[
+        { title:"Remove", icon:"trash", id:"remove-layer" },
+        { title:"Zoom to", icon:"zoom-to-object", id:"zoom-to" }
+      ]];
+    }
+  });
+  layerList.on("trigger-action", (e)=>{
+    const layer = e.item.layer;
+    if(e.action.id==="remove-layer"){
+      map.remove(layer);
+      const i = addedLayers.indexOf(layer); if(i>-1) addedLayers.splice(i,1);
+    } else if(e.action.id==="zoom-to" && layer.fullExtent){
+      view.goTo(layer.fullExtent).catch(()=>{});
+    }
+  });
+
+  const measurement = new Measurement({ view, container:"measureHost" });
+  $("measDist").addEventListener("click", ()=>{ measurement.activeTool="distance"; });
+  $("measArea").addEventListener("click", ()=>{ measurement.activeTool="area"; });
+  $("measClear").addEventListener("click", ()=>{ measurement.clear(); });
+
+  const sketch = new Sketch({
+    view, layer:sketchLayer, container:"sketchHost",
+    creationMode:"update",
+    visibleElements:{ settingsMenu:false }
+  });
+  $("sketchClear").addEventListener("click", ()=>{
+    if(sketchLayer.graphics.length && confirm("Erase all your drawings?")) sketchLayer.removeAll();
+  });
+
+  const coordWidget = new CoordinateConversion({ view, container:"coordHost" });
+
+  /* ---------- live footer readout ---------- */
+  function fmt(n){ return n.toFixed(5); }
+  view.on("pointer-move", (evt)=>{
+    const pt = view.toMap({ x:evt.x, y:evt.y });
+    if(pt) $("coordOut").textContent = `${fmt(pt.latitude)}, ${fmt(pt.longitude)}`;
+  });
+  $("coordOut").addEventListener("click", ()=>{
+    const txt = $("coordOut").textContent;
+    if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>toast("Coordinates copied"));
+  });
+  view.watch("scale", (s)=>{ if(s) $("scaleOut").textContent = Math.round(s).toLocaleString(); });
+
+  /* ---------- tool rail / panel switching ---------- */
+  const titles = { basemaps:"Basemap", add:"Add data", layers:"Layers", measure:"Measure",
+                   sketch:"Sketch", coords:"Coordinates", help:"Help" };
+  let currentPane = null;
+  function openPane(name){
+    if(currentPane===name){ closePanel(); return; }
+    currentPane = name;
+    $("panel").classList.add("open");
+    $("panelTitle").textContent = titles[name];
+    document.querySelectorAll(".pane").forEach(p=>p.classList.remove("active"));
+    $("pane-"+name).classList.add("active");
+    document.querySelectorAll(".tool").forEach(t=>t.classList.toggle("active", t.dataset.pane===name));
+  }
+  function closePanel(){
+    currentPane=null;
+    $("panel").classList.remove("open");
+    document.querySelectorAll(".tool").forEach(t=>t.classList.remove("active"));
+  }
+  document.querySelectorAll(".tool").forEach(t=>t.addEventListener("click", ()=>openPane(t.dataset.pane)));
+  $("panelClose").addEventListener("click", closePanel);
+
+  /* ---------- add public layers ---------- */
+  function addByPortalItem(id, title){
+    return Layer.fromPortalItem({ portalItem:new PortalItem({ id }) }).then(layer=>{
+      map.add(layer); registerLayer(layer);
+      layer.when(()=>{ if(layer.fullExtent) view.goTo(layer.fullExtent).catch(()=>{}); });
+      toast(`Added “${title||layer.title}”`);
+      openPane("layers");
+    });
+  }
+  function addByUrl(url){
+    return Layer.fromArcGISServerUrl({ url }).then(layer=>{
+      map.add(layer); registerLayer(layer);
+      layer.when(()=>{ if(layer.fullExtent) view.goTo(layer.fullExtent).catch(()=>{}); });
+      toast(`Added layer`); openPane("layers");
+    });
+  }
+
+  function searchLayers(){
+    const term = $("layerQuery").value.trim();
+    if(!term) return;
+    const box = $("layerResults");
+    box.innerHTML = `<p class="empty">Searching…</p>`;
+    const q = encodeURIComponent(`${term} (type:"Feature Service" OR type:"Map Service" OR type:"Feature Collection")`);
+    fetch(`https://www.arcgis.com/sharing/rest/search?q=${q}&f=json&num=12&sortField=numviews&sortOrder=desc`)
+      .then(r=>r.json())
+      .then(data=>{
+        box.innerHTML = "";
+        const items = (data.results||[]).filter(it=>it.access==="public");
+        if(!items.length){ box.innerHTML = `<p class="empty">No public layers found. Try another word.</p>`; return; }
+        items.forEach(it=>{
+          const card = document.createElement("div");
+          card.className="card";
+          card.innerHTML =
+            `<span class="tag">${it.type}</span>`+
+            `<h4>${escapeHtml(it.title)}</h4>`+
+            `<p class="meta">by ${escapeHtml(it.owner||"unknown")}${it.snippet?" · "+escapeHtml(it.snippet):""}</p>`+
+            `<button class="add">Add to map</button>`;
+          card.querySelector(".add").addEventListener("click", ()=>{
+            addByPortalItem(it.id, it.title).catch(()=>toast("Sorry — that layer couldn’t be added."));
+          });
+          box.appendChild(card);
+        });
+      })
+      .catch(()=>{ box.innerHTML = `<p class="empty">Search failed. Check your internet connection.</p>`; });
+  }
+  function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+  $("layerSearchBtn").addEventListener("click", searchLayers);
+  $("layerQuery").addEventListener("keydown", e=>{ if(e.key==="Enter") searchLayers(); });
+  $("layerUrlBtn").addEventListener("click", ()=>{
+    const url = $("layerUrl").value.trim();
+    if(url) addByUrl(url).catch(()=>toast("Couldn’t add that URL.")), $("layerUrl").value="";
+  });
+
+  /* ---------- SAVE: build standard ArcGIS web map JSON ---------- */
+  const GEOM_TYPE = { point:"esriGeometryPoint", polyline:"esriGeometryPolyline",
+                      polygon:"esriGeometryPolygon", extent:"esriGeometryEnvelope",
+                      multipoint:"esriGeometryMultipoint" };
+
+  function sketchFeatureCollection(){
+    // group editable drawings by geometry type into one feature-collection op layer
+    const groups = {};
+    sketchLayer.graphics.forEach((g, idx)=>{
+      const t = g.geometry && g.geometry.type;
+      const et = GEOM_TYPE[t]; if(!et) return;
+      (groups[et] = groups[et] || []).push(
+        { geometry:g.geometry.toJSON(), attributes:{ OBJECTID:idx+1 },
+          symbol: g.symbol ? g.symbol.toJSON() : null });
+    });
+    const subLayers = Object.keys(groups).map((et,i)=>({
+      layerDefinition:{
+        name:"Drawings "+(i+1), geometryType:et, objectIdField:"OBJECTID",
+        fields:[{ name:"OBJECTID", type:"esriFieldTypeOID", alias:"OBJECTID" }]
+      },
+      featureSet:{
+        geometryType:et,
+        spatialReference:view.spatialReference.toJSON(),
+        features:groups[et]
+      }
+    }));
+    if(!subLayers.length) return null;
+    return {
+      id:"mapfusion-drawings", title:"My drawings", layerType:"ArcGISFeatureLayer",
+      opacity:1, visibility:true, mapfusionSketch:true,
+      featureCollection:{ layers:subLayers }
+    };
+  }
+
+  function operationalLayerJSON(layer){
+    const base = {
+      id: layer.id, title: layer.title || "Layer",
+      opacity: (layer.opacity==null?1:layer.opacity), visibility: layer.visible!==false
+    };
+    if(layer.portalItem && layer.portalItem.id) base.itemId = layer.portalItem.id;
+    if(layer.url) base.url = layer.url;
+    // best-effort standard layerType
+    const t = layer.type;
+    base.layerType = t==="feature" ? "ArcGISFeatureLayer"
+                   : t==="map-image" ? "ArcGISMapServiceLayer"
+                   : t==="tile" ? "ArcGISTiledMapServiceLayer"
+                   : t==="imagery" ? "ArcGISImageServiceLayer"
+                   : t==="vector-tile" ? "VectorTileLayer"
+                   : "ArcGISFeatureLayer";
+    return base;
+  }
+
+  function buildWebMap(title){
+    const ops = [];
+    addedLayers.forEach(l=>{ if(map.layers.includes(l)) ops.push(operationalLayerJSON(l)); });
+    const sk = sketchFeatureCollection(); if(sk) ops.push(sk);
+
+    let baseMapJSON;
+    try { baseMapJSON = map.basemap.toJSON(); } catch(e){ baseMapJSON = { title:map.basemap.id }; }
+
+    return {
+      operationalLayers: ops,
+      baseMap: baseMapJSON,
+      spatialReference: view.spatialReference.toJSON(),
+      authoringApp:"MapFusionGIS", authoringAppVersion:"1.0", version:"2.30",
+      initialState:{ viewpoint:{ targetGeometry: view.extent.toJSON() } },
+      mapfusionMeta:{ title: title || "My Map" }
+    };
+  }
+
+  function downloadMap(title){
+    const json = buildWebMap(title);
+    const blob = new Blob([JSON.stringify(json,null,2)], { type:"application/json" });
+    const a = document.createElement("a");
+    const safe = (title||"my-map").replace(/[^\w\- ]+/g,"").trim().replace(/\s+/g,"-").toLowerCase() || "my-map";
+    a.href = URL.createObjectURL(blob);
+    a.download = `${safe}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+    toast("Map saved to your computer");
+  }
+
+  /* ---------- OPEN: rebuild map from web map JSON ---------- */
+  function loadWebMap(json){
+    // basemap
+    if(json.baseMap){
+      try { map.basemap = Basemap.fromJSON(json.baseMap); }
+      catch(e){ if(json.baseMap.title) map.basemap = json.baseMap.title; }
+    }
+    // clear current operational layers, keep editable sketch layer
+    addedLayers.slice().forEach(l=>map.remove(l));
+    addedLayers.length = 0;
+    sketchLayer.removeAll();
+
+    const ops = json.operationalLayers || [];
+    const tasks = [];
+    ops.forEach(op=>{
+      if(op.mapfusionSketch || op.mapmakerSketch || (op.featureCollection && (op.id==="mapfusion-drawings" || op.id==="mapmaker-drawings"))){
+        // rebuild editable drawings
+        (op.featureCollection.layers||[]).forEach(sub=>{
+          (sub.featureSet && sub.featureSet.features || []).forEach(f=>{
+            try{
+              const geom = geomJsonUtils.fromJSON(f.geometry);
+              const sym = f.symbol ? symbolJsonUtils.fromJSON(f.symbol) : null;
+              sketchLayer.add(new Graphic({ geometry:geom, symbol:sym }));
+            }catch(e){}
+          });
+        });
+        return;
+      }
+      if(op.url){
+        tasks.push(Layer.fromArcGISServerUrl({ url:op.url }).then(layer=>{
+          applyOpProps(layer, op); map.add(layer); registerLayer(layer);
+        }).catch(()=>{}));
+      } else if(op.itemId){
+        tasks.push(Layer.fromPortalItem({ portalItem:new PortalItem({ id:op.itemId }) }).then(layer=>{
+          applyOpProps(layer, op); map.add(layer); registerLayer(layer);
+        }).catch(()=>{}));
+      }
+    });
+
+    Promise.all(tasks).then(()=>{
+      // restore viewpoint
+      try{
+        const g = json.initialState && json.initialState.viewpoint && json.initialState.viewpoint.targetGeometry;
+        if(g) view.goTo(Extent.fromJSON(g)).catch(()=>{});
+      }catch(e){}
+      const name = (json.mapfusionMeta && json.mapfusionMeta.title) || (json.mapmakerMeta && json.mapmakerMeta.title) || "map";
+      toast(`Opened “${name}”`);
+      openPane("layers");
+    });
+  }
+  function applyOpProps(layer, op){
+    if(op.title) layer.title = op.title;
+    if(op.opacity!=null) layer.opacity = op.opacity;
+    if(op.visibility!=null) layer.visible = op.visibility;
+  }
+
+  /* ---------- header buttons + modals ---------- */
+  $("btnOpen").addEventListener("click", ()=>$("fileInput").click());
+  $("fileInput").addEventListener("change", (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try { loadWebMap(JSON.parse(reader.result)); }
+      catch(err){ toast("That file isn’t a valid map file."); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  });
+
+  // save modal
+  $("btnSave").addEventListener("click", ()=>$("saveModal").classList.add("open"));
+  $("saveCancel").addEventListener("click", ()=>$("saveModal").classList.remove("open"));
+  $("saveConfirm").addEventListener("click", ()=>{
+    downloadMap($("mapTitle").value.trim());
+    $("saveModal").classList.remove("open");
+  });
+
+  // key modal
+  $("btnKey").addEventListener("click", ()=>{
+    $("keyInput").value = ls(true,"mapfusionApiKey") || ls(true,"mapmakerApiKey") || "";
+    $("keyModal").classList.add("open");
+  });
+  $("keyCancel").addEventListener("click", ()=>$("keyModal").classList.remove("open"));
+  $("keySave").addEventListener("click", ()=>{
+    const k = $("keyInput").value.trim();
+    if(k){ ls(false,"mapfusionApiKey",k); esriConfig.apiKey = k; toast("Key saved — reload to use Esri search."); }
+    $("keyModal").classList.remove("open");
+  });
+  $("keyClear").addEventListener("click", ()=>{
+    try{ localStorage.removeItem("mapfusionApiKey"); localStorage.removeItem("mapmakerApiKey"); }catch(e){}
+    esriConfig.apiKey = null; toast("Key removed."); $("keyModal").classList.remove("open");
+  });
+
+  // close modals on backdrop click
+  document.querySelectorAll(".modal-bg").forEach(bg=>{
+    bg.addEventListener("click", e=>{ if(e.target===bg) bg.classList.remove("open"); });
+  });
+
+  /* ---------- ready ---------- */
+  view.when(()=>{ openPane("basemaps"); });
+});
+</script>
+</body>
+</html>
