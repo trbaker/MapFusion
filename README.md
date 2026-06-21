@@ -1,2 +1,0 @@
-# MapFusion
-mapping tool
